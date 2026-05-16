@@ -19,10 +19,18 @@ MEMORY_FILES = {
 READ_ONLY_FOR_AI = {"SOUL.md", "PINNED.md"}
 
 
+def memory_file_path(filename: str) -> Path:
+    filename = safe_filename(filename)
+    if filename == "SOUL.md":
+        return settings.hermes_home / "SOUL.md"
+    return settings.memory_dir / filename
+
+
 def ensure_memory_files() -> None:
+    settings.hermes_home.mkdir(parents=True, exist_ok=True)
     settings.memory_dir.mkdir(parents=True, exist_ok=True)
     for filename, initial in MEMORY_FILES.items():
-        path = settings.memory_dir / filename
+        path = memory_file_path(filename)
         if not path.exists():
             path.write_text(initial, encoding="utf-8")
 
@@ -36,13 +44,13 @@ def safe_filename(filename: str) -> str:
 def read_memory_file(filename: str) -> str:
     ensure_memory_files()
     filename = safe_filename(filename)
-    return (settings.memory_dir / filename).read_text(encoding="utf-8")
+    return memory_file_path(filename).read_text(encoding="utf-8")
 
 
 def write_memory_file(filename: str, content: str) -> None:
     ensure_memory_files()
     filename = safe_filename(filename)
-    path = settings.memory_dir / filename
+    path = memory_file_path(filename)
     previous = path.read_text(encoding="utf-8") if path.exists() else ""
     with db() as conn:
         conn.execute(
@@ -50,6 +58,34 @@ def write_memory_file(filename: str, content: str) -> None:
             (filename, previous, time.time()),
         )
     path.write_text(content, encoding="utf-8")
+
+
+def list_file_versions(filename: str, limit: int = 20) -> list[dict]:
+    filename = safe_filename(filename)
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, filename, length(content) AS size, created_at
+            FROM file_versions
+            WHERE filename=?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (filename, min(max(limit, 1), 100)),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def restore_file_version(filename: str, version_id: int) -> None:
+    filename = safe_filename(filename)
+    with db() as conn:
+        row = conn.execute(
+            "SELECT content FROM file_versions WHERE id=? AND filename=?",
+            (version_id, filename),
+        ).fetchone()
+    if not row:
+        raise ValueError("unknown file version")
+    write_memory_file(filename, row["content"])
 
 
 def append_memory_file(filename: str, heading: str, body: str) -> None:

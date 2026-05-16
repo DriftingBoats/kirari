@@ -36,6 +36,9 @@ Goal: make Markdown files the source of truth for companion continuity.
 - Make AI-generated high-risk memory changes go through review.
 - Keep `SOUL.md` and `PINNED.md` user-controlled.
 
+Status: first pass shipped. `SOUL.md` uses Hermes' native profile root,
+memory edits keep versions, and the Mini App can restore older file versions.
+
 ### 3. Dream / Feel Loop
 
 Goal: daily reflection should improve continuity without hallucinating facts.
@@ -90,5 +93,5 @@ Goal: make setup reproducible for other users.
 - [x] Hermes session importer.
 - [x] Dashboard import button.
 - [x] Dream/feel using imported Hermes sessions.
-- [ ] Memory review workflow polish.
+- [x] Memory review workflow polish.
 - [ ] Telegram Mini App auth.

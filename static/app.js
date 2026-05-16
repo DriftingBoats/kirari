@@ -73,6 +73,20 @@ async function loadFile(name) {
   const file = await api(`/api/files/${encodeURIComponent(name)}`);
   $('#currentFile').textContent = file.name;
   $('#fileEditor').value = file.content;
+  await loadFileVersions(name);
+}
+
+async function loadFileVersions(name) {
+  const versions = await api(`/api/files/${encodeURIComponent(name)}/versions`);
+  $('#fileVersions').innerHTML = versions.map(v => `
+    <div class="item">
+      <div class="item-head">
+        <strong>#${v.id}</strong>
+        <small>${fmt(v.created_at)} · ${v.size} chars</small>
+      </div>
+      <button class="ghost" data-restore-file="${name}" data-version="${v.id}">恢复</button>
+    </div>
+  `).join('') || '<div class="item">还没有历史版本。</div>';
 }
 
 async function saveFile() {
@@ -265,7 +279,16 @@ document.body.onclick = async (e) => {
       method: 'POST',
       body: JSON.stringify({ action: review.dataset.action }),
     });
-    loadReviews();
+    refreshAll();
+  }
+  const restore = e.target.closest('[data-restore-file]');
+  if (restore) {
+    await api(
+      `/api/files/${encodeURIComponent(restore.dataset.restoreFile)}/versions/${restore.dataset.version}/restore`,
+      { method: 'POST', body: '{}' }
+    );
+    toast('已恢复');
+    loadFile(currentFile);
   }
 };
 

@@ -73,9 +73,10 @@ kirari/
 Kirari keeps important state in plain Markdown files so the system is readable,
 auditable, and easy to edit by hand.
 
-Default memory location:
+Default memory locations:
 
 ```text
+~/.hermes/SOUL.md
 ~/.hermes/memories/
 ```
 
@@ -88,6 +89,10 @@ Recommended files:
 - `DREAM.md` - daily reflection, consolidation, contradictions, and questions.
 - `PINNED.md` - promises, boundaries, hard rules, and never-forget items.
 - `BOARD.md` - curated message-board archive.
+
+`SOUL.md` uses Hermes' native profile root so Hermes and Kirari edit the same
+identity file. The other companion memory files live under `~/.hermes/memories/`.
+Mini App edits are versioned in the local SQLite database and can be restored.
 
 The intent is to keep the core identity and memory reviewable. Embeddings can
 be added later for search quality, but they should not replace the readable

@@ -15,7 +15,16 @@ from .db import db, init_db, row_to_dict, rows_to_dicts, upsert_memory_item
 from .dream import run_dream
 from .hermes_client import ask_hermes, hermes_available
 from .hermes_sessions import import_hermes_telegram_sessions
-from .memory_files import MEMORY_FILES, append_memory_file, ensure_memory_files, read_memory_file, write_memory_file
+from .memory_files import (
+    MEMORY_FILES,
+    append_memory_file,
+    ensure_memory_files,
+    list_file_versions,
+    memory_file_path,
+    read_memory_file,
+    restore_file_version,
+    write_memory_file,
+)
 from .reminders import reminder_loop
 from .retrieval import recent_telegram_context, recall_memories, render_recalled, simple_embedding
 from .schemas import BoardCreate, CalendarCreate, ChatRequest, FileUpdate, ReminderCreate, ReviewAction
@@ -75,7 +84,10 @@ async def test_chat(body: ChatRequest):
 @app.get("/api/files")
 async def list_files():
     ensure_memory_files()
-    return [{"name": name, "size": len(read_memory_file(name))} for name in MEMORY_FILES.keys()]
+    return [
+        {"name": name, "size": len(read_memory_file(name)), "path": str(memory_file_path(name))}
+        for name in MEMORY_FILES.keys()
+    ]
 
 
 @app.get("/api/files/{filename}")
@@ -92,6 +104,23 @@ async def put_file(filename: str, body: FileUpdate):
         write_memory_file(filename, body.content)
     except ValueError:
         raise HTTPException(status_code=404, detail="unknown file")
+    return {"ok": True}
+
+
+@app.get("/api/files/{filename}/versions")
+async def file_versions(filename: str, limit: int = 20):
+    try:
+        return list_file_versions(filename, limit)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="unknown file")
+
+
+@app.post("/api/files/{filename}/versions/{version_id}/restore")
+async def restore_file(filename: str, version_id: int):
+    try:
+        restore_file_version(filename, version_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="unknown file version")
     return {"ok": True}
 
 
@@ -264,6 +293,30 @@ async def reviews():
     return result
 
 
+async def _approve_review(row) -> None:
+    payload = json.loads(row["payload_json"] or "{}")
+    text = str(payload.get("text", "")).strip()
+    if not text:
+        return
+    kind = str(row["kind"] or payload.get("kind") or "memory").strip().lower()
+    heading = str(payload.get("title") or payload.get("kind") or kind).strip().title()
+    if kind == "feel":
+        append_memory_file("FEEL.md", f"Reviewed {heading}", text)
+        return
+    if kind in {"promise", "boundary"}:
+        append_memory_file("PINNED.md", f"Reviewed {heading}", text)
+        return
+    await create_memory(
+        {
+            "type": payload.get("type") or payload.get("kind") or "event",
+            "title": payload.get("title") or payload.get("kind") or "reviewed",
+            "text": text,
+            "importance": payload.get("importance", 0.6),
+            "emotional_weight": payload.get("emotional_weight", 0.0),
+        }
+    )
+
+
 @app.post("/api/reviews/{review_id}")
 async def review_action(review_id: str, body: ReviewAction):
     if body.action not in {"approve", "reject"}:
@@ -275,13 +328,7 @@ async def review_action(review_id: str, body: ReviewAction):
         status = "approved" if body.action == "approve" else "rejected"
         conn.execute("UPDATE pending_reviews SET status=?, updated_at=? WHERE id=?", (status, time.time(), review_id))
     if body.action == "approve":
-        payload = json.loads(row["payload_json"] or "{}")
-        text = payload.get("text", "")
-        if text:
-            if row["kind"] == "feel":
-                append_memory_file("FEEL.md", "Reviewed Feel", text)
-            else:
-                await create_memory({"type": payload.get("kind", "event"), "title": payload.get("kind", "reviewed"), "text": text})
+        await _approve_review(row)
     return {"ok": True}
 
 

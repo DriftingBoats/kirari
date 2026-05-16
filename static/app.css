@@ -180,6 +180,14 @@ textarea {
   color: var(--ink);
   line-height: 1.55;
 }
+.version-panel {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.compact .item {
+  padding: 10px;
+}
 .composer, .grid-form {
   display: grid;
   gap: 8px;
