@@ -125,6 +125,7 @@ Transcript:
                 "INSERT INTO board_messages(id, author, text, source, unread, created_at) VALUES(?,?,?,?,?,?)",
                 (f"board_{uuid.uuid4().hex}", "ai", board_text, "dream", 1, now),
             )
+        append_memory_file("BOARD.md", f"dream {time.strftime('%Y-%m-%d')}", board_text)
 
     log("info", "dream completed", {"reason": reason, "dream_id": dream_id, "hermes_ok": result.ok})
     return {"ok": True, "id": dream_id, "summary": summary, "feel": feel}

@@ -157,7 +157,8 @@ async def put_file(filename: str, body: FileUpdate):
         write_memory_file(filename, body.content)
     except ValueError:
         raise HTTPException(status_code=404, detail="unknown file")
-    return {"ok": True}
+    reload_result = await _reload_hermes_context()
+    return {"ok": True, "reload": reload_result}
 
 
 @app.get("/api/files/{filename}/versions")
@@ -174,7 +175,8 @@ async def restore_file(filename: str, version_id: int):
         restore_file_version(filename, version_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="unknown file version")
-    return {"ok": True}
+    reload_result = await _reload_hermes_context()
+    return {"ok": True, "reload": reload_result}
 
 
 @app.get("/api/messages")
@@ -193,8 +195,8 @@ async def import_hermes_sessions():
     return {"ok": True, **import_hermes_telegram_sessions()}
 
 
-@app.post("/api/hermes/reload-context")
-async def reload_hermes_context():
+async def _reload_hermes_context():
+    ensure_memory_files()
     if not settings.hermes_gateway_service:
         return {"ok": False, "message": "Hermes gateway service is not configured."}
     proc = await asyncio.create_subprocess_exec(
@@ -213,6 +215,11 @@ async def reload_hermes_context():
             or "failed to restart Hermes gateway",
         )
     return {"ok": True, "service": settings.hermes_gateway_service}
+
+
+@app.post("/api/hermes/reload-context")
+async def reload_hermes_context():
+    return await _reload_hermes_context()
 
 
 @app.get("/api/memories")
@@ -249,7 +256,8 @@ async def create_memory(body: dict):
     }
     upsert_memory_item(item)
     append_memory_file("MEMORY.md", item["title"] or item["type"], text)
-    return {"ok": True, "id": mem_id}
+    reload_result = await _reload_hermes_context()
+    return {"ok": True, "id": mem_id, "reload": reload_result}
 
 
 @app.get("/api/board")
@@ -271,7 +279,8 @@ async def create_board(body: BoardCreate):
             (item_id, body.author, body.text, body.source, 1, now),
         )
     append_memory_file("BOARD.md", f"{body.author} {time.strftime('%Y-%m-%d')}", body.text)
-    return {"ok": True, "id": item_id}
+    reload_result = await _reload_hermes_context()
+    return {"ok": True, "id": item_id, "reload": reload_result}
 
 
 @app.patch("/api/board/{item_id}")
@@ -377,9 +386,11 @@ async def _approve_review(row) -> None:
     heading = str(payload.get("title") or payload.get("kind") or kind).strip().title()
     if kind == "feel":
         append_memory_file("FEEL.md", f"Reviewed {heading}", text)
+        await _reload_hermes_context()
         return
     if kind in {"promise", "boundary"}:
         append_memory_file("PINNED.md", f"Reviewed {heading}", text)
+        await _reload_hermes_context()
         return
     await create_memory(
         {
@@ -409,7 +420,10 @@ async def review_action(review_id: str, body: ReviewAction):
 
 @app.post("/api/dream/run")
 async def dream_run():
-    return await run_dream("manual")
+    result = await run_dream("manual")
+    if result.get("ok"):
+        result["reload"] = await _reload_hermes_context()
+    return result
 
 
 @app.get("/api/logs")

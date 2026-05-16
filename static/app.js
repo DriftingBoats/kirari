@@ -120,12 +120,7 @@ async function saveFile() {
     method: 'PUT',
     body: JSON.stringify({ content: $('#fileEditor').value }),
   });
-  if (['SOUL.md', 'PINNED.md', 'USER.md', 'MEMORY.md', 'FEEL.md'].includes(currentFile)) {
-    await api('/api/hermes/reload-context', { method: 'POST', body: '{}' });
-    toast('已保存并重载 Hermes');
-  } else {
-    toast('已保存');
-  }
+  toast('已保存并即时生效');
   loadFiles();
 }
 

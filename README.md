@@ -263,10 +263,14 @@ verifies it with `TELEGRAM_BOT_TOKEN`, and optional
 `TELEGRAM_ALLOWED_USER_IDS` restricts access to specific Telegram accounts.
 The browser UI only prompts for the key when it is opened outside Telegram.
 
-Hermes Gateway caches the agent system prompt for active sessions. When the
-Mini App saves `SOUL.md`, `PINNED.md`, `USER.md`, `MEMORY.md`, or `FEEL.md`,
-Kirari restarts `HERMES_GATEWAY_SERVICE` so the next Telegram reply uses the
-fresh companion context.
+Hermes Gateway caches the agent system prompt for active sessions. Kirari writes
+`SOUL.md` to Hermes' native identity slot and also generates
+`~/.hermes/HERMES.md` from `PINNED.md`, `USER.md`, `MEMORY.md`, `FEEL.md`,
+`DREAM.md`, and `BOARD.md` so Gateway injects those companion files as project
+context. When the Mini App saves any editable context file, Kirari restarts
+`HERMES_GATEWAY_SERVICE` so the next Telegram reply uses the fresh context.
+The same reload path runs after generated memories, approved review items,
+board messages, and dream/feel digestion.
 
 ## API Surface
 
