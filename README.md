@@ -246,8 +246,18 @@ http://127.0.0.1:8080/
 Health/config endpoint:
 
 ```text
-GET /api/config
+GET /api/status
 ```
+
+If the service is reachable from a network, set an access key:
+
+```env
+KIRARI_ACCESS_KEY=replace_with_a_long_random_value
+```
+
+When configured, all `/api/*` routes except `/api/auth/status` require the
+`X-Kirari-Key` header, `?key=...`, or the `kirari_key` cookie. The browser UI
+prompts for the key and stores it in local storage.
 
 ## API Surface
 

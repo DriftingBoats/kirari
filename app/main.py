@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -50,9 +51,31 @@ app = FastAPI(title="Aion Hermes Telegram", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent.parent / "static")), name="static")
 
 
+def _request_key(request: Request) -> str:
+    return (
+        request.headers.get("x-kirari-key")
+        or request.query_params.get("key")
+        or request.cookies.get("kirari_key")
+        or ""
+    )
+
+
+@app.middleware("http")
+async def require_access_key(request: Request, call_next):
+    if request.url.path.startswith("/api/") and request.url.path != "/api/auth/status":
+        if settings.access_key and not secrets.compare_digest(_request_key(request), settings.access_key):
+            return JSONResponse({"detail": "invalid access key"}, status_code=401)
+    return await call_next(request)
+
+
 @app.get("/")
 async def index():
     return FileResponse(Path(__file__).parent.parent / "static" / "index.html")
+
+
+@app.get("/api/auth/status")
+async def auth_status():
+    return {"required": bool(settings.access_key)}
 
 
 @app.get("/api/status")

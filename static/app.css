@@ -17,6 +17,32 @@ body {
   color: var(--ink);
   font-family: ui-serif, Georgia, "Times New Roman", serif;
 }
+.auth-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--paper), black 8%);
+}
+.auth-box {
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  background: var(--cream);
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+}
+.auth-box h1 {
+  font-size: 40px;
+}
+.auth-box p {
+  margin: 0;
+  color: var(--muted);
+}
+.auth-panel[hidden] {
+  display: none;
+}
 button, input, textarea, select {
   font: inherit;
 }
@@ -87,6 +113,10 @@ button, input, textarea, select {
   padding: 10px;
   color: var(--muted);
   background: var(--cream);
+}
+.rail-auth {
+  margin-top: 10px;
+  width: 100%;
 }
 .workspace {
   padding: clamp(18px, 4vw, 44px);

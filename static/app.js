@@ -1,6 +1,7 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 let currentFile = 'SOUL.md';
+let accessKey = localStorage.getItem('kirari_access_key') || '';
 
 function toast(text) {
   const el = $('#toast');
@@ -11,11 +12,28 @@ function toast(text) {
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessKey ? { 'X-Kirari-Key': accessKey } : {}),
+      ...(opts.headers || {}),
+    },
     ...opts,
   });
+  if (res.status === 401) {
+    showAuth();
+    throw new Error('需要访问密钥');
+  }
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+function showAuth() {
+  $('#authPanel').hidden = false;
+  $('#accessKeyInput').focus();
+}
+
+function hideAuth() {
+  $('#authPanel').hidden = true;
 }
 
 function fmt(ts) {
@@ -292,4 +310,29 @@ document.body.onclick = async (e) => {
   }
 };
 
-refreshAll().catch(err => toast(err.message));
+$('#authForm').onsubmit = async (e) => {
+  e.preventDefault();
+  accessKey = $('#accessKeyInput').value.trim();
+  localStorage.setItem('kirari_access_key', accessKey);
+  try {
+    await refreshAll();
+    hideAuth();
+  } catch (err) {
+    toast('密钥不正确');
+  }
+};
+
+$('#clearAccessKeyBtn').onclick = () => {
+  accessKey = '';
+  localStorage.removeItem('kirari_access_key');
+  showAuth();
+};
+
+(async () => {
+  const auth = await fetch('/api/auth/status').then(res => res.json());
+  if (auth.required && !accessKey) {
+    showAuth();
+    return;
+  }
+  refreshAll().catch(err => toast(err.message));
+})();

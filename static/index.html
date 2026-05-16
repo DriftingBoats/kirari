@@ -7,6 +7,14 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+  <div class="auth-panel" id="authPanel" hidden>
+    <form id="authForm" class="auth-box">
+      <h1>Kirari</h1>
+      <p>输入访问密钥。</p>
+      <input id="accessKeyInput" type="password" autocomplete="current-password" placeholder="Access key">
+      <button class="primary">进入</button>
+    </form>
+  </div>
   <main class="shell">
     <aside class="rail">
       <div class="brand">
@@ -26,6 +34,7 @@
         <button data-tab="console">控制台</button>
       </nav>
       <div class="rail-foot" id="statusPill">检查中</div>
+      <button class="ghost rail-auth" id="clearAccessKeyBtn">重置密钥</button>
     </aside>
 
     <section class="workspace">
