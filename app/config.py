@@ -26,8 +26,12 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-def _csv_ints(name: str) -> set[int]:
-    raw = os.getenv(name, "").strip()
+def _csv_ints(*names: str) -> set[int]:
+    raw = ""
+    for name in names:
+        raw = os.getenv(name, "").strip()
+        if raw:
+            break
     if not raw:
         return set()
     ids: set[int] = set()
@@ -50,8 +54,13 @@ class Settings(BaseModel):
     access_key: str = Field(default_factory=lambda: os.getenv("KIRARI_ACCESS_KEY", os.getenv("APP_ACCESS_KEY", "")))
 
     telegram_bot_token: str = Field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
-    telegram_allowed_user_ids: set[int] = Field(default_factory=lambda: _csv_ints("TELEGRAM_ALLOWED_USER_IDS"))
+    telegram_allowed_user_ids: set[int] = Field(
+        default_factory=lambda: _csv_ints("TELEGRAM_ALLOWED_USER_IDS", "TELEGRAM_ALLOWED_USERS")
+    )
     telegram_webhook_secret: str = Field(default_factory=lambda: os.getenv("TELEGRAM_WEBHOOK_SECRET", ""))
+    telegram_webapp_auth_max_age_seconds: int = Field(
+        default_factory=lambda: _int_env("TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS", 604800)
+    )
 
     hermes_bin: str = Field(default_factory=lambda: os.getenv("HERMES_BIN", "hermes"))
     hermes_home: Path = Field(default_factory=lambda: Path(os.getenv("HERMES_HOME", "~/.hermes")).expanduser())

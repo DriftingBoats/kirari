@@ -2,6 +2,13 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 let currentFile = 'SOUL.md';
 let accessKey = localStorage.getItem('kirari_access_key') || '';
+const tg = window.Telegram?.WebApp;
+const telegramInitData = tg?.initData || '';
+
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
 
 function toast(text) {
   const el = $('#toast');
@@ -14,6 +21,7 @@ async function api(path, opts = {}) {
   const res = await fetch(path, {
     headers: {
       'Content-Type': 'application/json',
+      ...(telegramInitData ? { 'X-Telegram-Init-Data': telegramInitData } : {}),
       ...(accessKey ? { 'X-Kirari-Key': accessKey } : {}),
       ...(opts.headers || {}),
     },
@@ -325,12 +333,13 @@ $('#authForm').onsubmit = async (e) => {
 $('#clearAccessKeyBtn').onclick = () => {
   accessKey = '';
   localStorage.removeItem('kirari_access_key');
-  showAuth();
+  if (!telegramInitData) showAuth();
 };
 
 (async () => {
   const auth = await fetch('/api/auth/status').then(res => res.json());
-  if (auth.required && !accessKey) {
+  $('#clearAccessKeyBtn').hidden = Boolean(telegramInitData);
+  if (auth.required && !accessKey && !telegramInitData) {
     showAuth();
     return;
   }

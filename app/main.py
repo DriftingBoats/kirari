@@ -30,6 +30,7 @@ from .reminders import reminder_loop
 from .retrieval import recent_telegram_context, recall_memories, render_recalled, simple_embedding
 from .schemas import BoardCreate, CalendarCreate, ChatRequest, FileUpdate, ReminderCreate, ReviewAction
 from .telegram import send_message, telegram_webhook
+from .telegram_webapp import TelegramWebAppAuthError, validate_init_data
 
 _reminder_task = None
 
@@ -60,10 +61,34 @@ def _request_key(request: Request) -> str:
     )
 
 
+def _telegram_init_data(request: Request) -> str:
+    return request.headers.get("x-telegram-init-data") or request.query_params.get("tg_init_data") or ""
+
+
+def _valid_access_key(request: Request) -> bool:
+    return bool(settings.access_key) and secrets.compare_digest(_request_key(request), settings.access_key)
+
+
+def _valid_telegram_webapp(request: Request) -> bool:
+    if not settings.telegram_bot_token:
+        return False
+    try:
+        validate_init_data(
+            _telegram_init_data(request),
+            bot_token=settings.telegram_bot_token,
+            allowed_user_ids=settings.telegram_allowed_user_ids,
+            max_age_seconds=settings.telegram_webapp_auth_max_age_seconds,
+        )
+    except TelegramWebAppAuthError:
+        return False
+    return True
+
+
 @app.middleware("http")
 async def require_access_key(request: Request, call_next):
     if request.url.path.startswith("/api/") and request.url.path != "/api/auth/status":
-        if settings.access_key and not secrets.compare_digest(_request_key(request), settings.access_key):
+        auth_required = bool(settings.access_key or settings.telegram_bot_token)
+        if auth_required and not (_valid_access_key(request) or _valid_telegram_webapp(request)):
             return JSONResponse({"detail": "invalid access key"}, status_code=401)
     return await call_next(request)
 
@@ -75,7 +100,11 @@ async def index():
 
 @app.get("/api/auth/status")
 async def auth_status():
-    return {"required": bool(settings.access_key)}
+    return {
+        "required": bool(settings.access_key or settings.telegram_bot_token),
+        "telegram_configured": bool(settings.telegram_bot_token),
+        "telegram_user_restricted": bool(settings.telegram_allowed_user_ids),
+    }
 
 
 @app.get("/api/status")

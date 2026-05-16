@@ -256,8 +256,12 @@ KIRARI_ACCESS_KEY=replace_with_a_long_random_value
 ```
 
 When configured, all `/api/*` routes except `/api/auth/status` require the
-`X-Kirari-Key` header, `?key=...`, or the `kirari_key` cookie. The browser UI
-prompts for the key and stores it in local storage.
+`X-Kirari-Key` header, `?key=...`, the `kirari_key` cookie, or a valid
+Telegram Mini App `initData` value sent as `X-Telegram-Init-Data`. The Mini App
+path is the preferred entry: Telegram signs the current user session, Kirari
+verifies it with `TELEGRAM_BOT_TOKEN`, and optional
+`TELEGRAM_ALLOWED_USER_IDS` restricts access to specific Telegram accounts.
+The browser UI only prompts for the key when it is opened outside Telegram.
 
 ## API Surface
 
