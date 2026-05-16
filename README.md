@@ -263,6 +263,11 @@ verifies it with `TELEGRAM_BOT_TOKEN`, and optional
 `TELEGRAM_ALLOWED_USER_IDS` restricts access to specific Telegram accounts.
 The browser UI only prompts for the key when it is opened outside Telegram.
 
+Hermes Gateway caches the agent system prompt for active sessions. When the
+Mini App saves `SOUL.md`, `PINNED.md`, `USER.md`, `MEMORY.md`, or `FEEL.md`,
+Kirari restarts `HERMES_GATEWAY_SERVICE` so the next Telegram reply uses the
+fresh companion context.
+
 ## API Surface
 
 Common routes:

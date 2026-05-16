@@ -4,6 +4,7 @@ import json
 import secrets
 import time
 import uuid
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -190,6 +191,28 @@ async def messages(limit: int = 100):
 @app.post("/api/import/hermes-sessions")
 async def import_hermes_sessions():
     return {"ok": True, **import_hermes_telegram_sessions()}
+
+
+@app.post("/api/hermes/reload-context")
+async def reload_hermes_context():
+    if not settings.hermes_gateway_service:
+        return {"ok": False, "message": "Hermes gateway service is not configured."}
+    proc = await asyncio.create_subprocess_exec(
+        "systemctl",
+        "--user",
+        "restart",
+        settings.hermes_gateway_service,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=(stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace")).strip()
+            or "failed to restart Hermes gateway",
+        )
+    return {"ok": True, "service": settings.hermes_gateway_service}
 
 
 @app.get("/api/memories")

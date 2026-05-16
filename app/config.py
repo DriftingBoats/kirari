@@ -68,6 +68,9 @@ class Settings(BaseModel):
     hermes_model: str = Field(default_factory=lambda: os.getenv("HERMES_MODEL", ""))
     hermes_timeout_seconds: int = Field(default_factory=lambda: _int_env("HERMES_TIMEOUT_SECONDS", 180))
     hermes_dry_run: bool = Field(default_factory=lambda: _bool_env("HERMES_DRY_RUN", False))
+    hermes_gateway_service: str = Field(
+        default_factory=lambda: os.getenv("HERMES_GATEWAY_SERVICE", "hermes-gateway.service")
+    )
 
     dream_hour: int = Field(default_factory=lambda: _int_env("DREAM_HOUR", 4))
     recent_message_limit: int = Field(default_factory=lambda: _int_env("RECENT_MESSAGE_LIMIT", 24))
