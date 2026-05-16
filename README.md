@@ -192,7 +192,7 @@ hermes auth status
 ### Install Kirari
 
 ```bash
-git clone https://github.com/YOUR_NAME/kirari.git
+git clone https://github.com/DriftingBoats/kirari.git
 cd kirari
 python3 -m venv .venv
 . .venv/bin/activate
