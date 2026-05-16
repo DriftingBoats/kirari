@@ -183,6 +183,19 @@ $$('.nav button').forEach(btn => {
 });
 
 $('#saveFileBtn').onclick = saveFile;
+$('#syncHermesBtn').onclick = async () => {
+  $('#syncHermesBtn').disabled = true;
+  try {
+    const result = await api('/api/import/hermes-sessions', { method: 'POST', body: '{}' });
+    toast(`已同步 ${result.messages} 条`);
+    refreshAll();
+  } catch (e) {
+    toast('同步失败');
+  } finally {
+    $('#syncHermesBtn').disabled = false;
+  }
+};
+
 $('#runDreamBtn').onclick = async () => {
   $('#runDreamBtn').disabled = true;
   try {

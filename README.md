@@ -31,6 +31,8 @@ application layer and documentation, while your local Hermes installation,
 Telegram bot token, Codex/OAuth credentials, database, pairing records, and
 runtime memories stay outside git.
 
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the current development order.
+
 The production path I use is:
 
 ```text

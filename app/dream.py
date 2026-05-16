@@ -7,6 +7,7 @@ import uuid
 
 from .db import db, log, upsert_memory_item
 from .hermes_client import ask_hermes
+from .hermes_sessions import import_hermes_telegram_sessions
 from .memory_files import append_memory_file, read_memory_file
 from .retrieval import simple_embedding
 
@@ -41,6 +42,7 @@ def _extract_json_object(text: str) -> dict:
 
 
 async def run_dream(reason: str = "manual") -> dict:
+    import_hermes_telegram_sessions()
     transcript = _recent_day_transcript()
     if not transcript.strip():
         return {"ok": False, "message": "no recent telegram messages"}

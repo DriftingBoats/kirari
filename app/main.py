@@ -14,6 +14,7 @@ from .config import settings
 from .db import db, init_db, row_to_dict, rows_to_dicts, upsert_memory_item
 from .dream import run_dream
 from .hermes_client import ask_hermes, hermes_available
+from .hermes_sessions import import_hermes_telegram_sessions
 from .memory_files import MEMORY_FILES, append_memory_file, ensure_memory_files, read_memory_file, write_memory_file
 from .reminders import reminder_loop
 from .retrieval import recent_telegram_context, recall_memories, render_recalled, simple_embedding
@@ -51,6 +52,7 @@ async def status():
         "hermes_available": hermes_available(),
         "hermes_bin": settings.hermes_bin,
         "hermes_home": str(settings.hermes_home),
+        "hermes_sessions_dir": str(settings.hermes_home / "sessions"),
         "memory_dir": str(settings.memory_dir),
         "telegram_configured": bool(settings.telegram_bot_token),
         "db_path": str(settings.db_path),
@@ -95,12 +97,18 @@ async def put_file(filename: str, body: FileUpdate):
 
 @app.get("/api/messages")
 async def messages(limit: int = 100):
+    import_hermes_telegram_sessions()
     with db() as conn:
         rows = conn.execute(
             "SELECT * FROM telegram_messages ORDER BY created_at DESC LIMIT ?",
             (min(limit, 500),),
         ).fetchall()
     return list(reversed(rows_to_dicts(rows)))
+
+
+@app.post("/api/import/hermes-sessions")
+async def import_hermes_sessions():
+    return {"ok": True, **import_hermes_telegram_sessions()}
 
 
 @app.get("/api/memories")

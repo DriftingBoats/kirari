@@ -135,6 +135,15 @@ def init_db() -> None:
                 data_json TEXT NOT NULL DEFAULT '{}',
                 created_at REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS hermes_session_imports (
+                source_path TEXT NOT NULL,
+                line_no INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                imported_at REAL NOT NULL,
+                PRIMARY KEY(source_path, line_no)
+            );
             """
         )
 
