@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aion Hermes</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="shell">
+    <aside class="rail">
+      <div class="brand">
+        <span class="mark"></span>
+        <div>
+          <strong>Aion Hermes</strong>
+          <small>Telegram companion console</small>
+        </div>
+      </div>
+      <nav class="nav">
+        <button data-tab="dashboard" class="active">总览</button>
+        <button data-tab="files">灵魂与记忆</button>
+        <button data-tab="board">留言板</button>
+        <button data-tab="calendar">日历</button>
+        <button data-tab="reminders">提醒</button>
+        <button data-tab="reviews">待确认</button>
+        <button data-tab="console">控制台</button>
+      </nav>
+      <div class="rail-foot" id="statusPill">检查中</div>
+    </aside>
+
+    <section class="workspace">
+      <section id="dashboard" class="view active">
+        <div class="topline">
+          <div>
+            <h1>今日</h1>
+            <p>这里收束聊天、记忆、留言、日历和提醒。</p>
+          </div>
+          <button class="primary" id="runDreamBtn">运行 dream</button>
+        </div>
+        <div class="overview">
+          <div class="metric"><span id="metricMessages">0</span><small>消息</small></div>
+          <div class="metric"><span id="metricBoard">0</span><small>留言</small></div>
+          <div class="metric"><span id="metricReminders">0</span><small>提醒</small></div>
+          <div class="metric"><span id="metricReviews">0</span><small>待确认</small></div>
+        </div>
+        <div class="band">
+          <h2>最近消息</h2>
+          <div id="recentMessages" class="timeline"></div>
+        </div>
+      </section>
+
+      <section id="files" class="view">
+        <div class="split">
+          <div class="file-list" id="fileList"></div>
+          <div class="editor">
+            <div class="editor-head">
+              <h1 id="currentFile">SOUL.md</h1>
+              <button class="primary" id="saveFileBtn">保存</button>
+            </div>
+            <textarea id="fileEditor" spellcheck="false"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section id="board" class="view">
+        <div class="topline">
+          <div>
+            <h1>留言板</h1>
+            <p>你们不在同一时间说出口的话。</p>
+          </div>
+        </div>
+        <form class="composer" id="boardForm">
+          <select id="boardAuthor">
+            <option value="user">我</option>
+            <option value="ai">TA</option>
+          </select>
+          <input id="boardText" placeholder="写一条留言">
+          <button class="primary">留下</button>
+        </form>
+        <div id="boardList" class="masonry"></div>
+      </section>
+
+      <section id="calendar" class="view">
+        <div class="topline">
+          <div>
+            <h1>日历</h1>
+            <p>生活、关系和工作放在同一个时间线里。</p>
+          </div>
+        </div>
+        <form class="grid-form" id="calendarForm">
+          <select id="calLayer">
+            <option value="life">生活</option>
+            <option value="relationship">关系</option>
+            <option value="work">工作</option>
+          </select>
+          <input id="calTitle" placeholder="事件标题">
+          <input id="calWhen" type="datetime-local">
+          <input id="calDesc" placeholder="备注">
+          <button class="primary">添加</button>
+        </form>
+        <div id="calendarList" class="timeline"></div>
+      </section>
+
+      <section id="reminders" class="view">
+        <div class="topline">
+          <div>
+            <h1>提醒</h1>
+            <p>到点由 Telegram 推送，也会留在这里。</p>
+          </div>
+        </div>
+        <form class="grid-form" id="reminderForm">
+          <input id="remTitle" placeholder="提醒内容">
+          <input id="remWhen" type="datetime-local">
+          <input id="remDesc" placeholder="备注">
+          <button class="primary">添加</button>
+        </form>
+        <div id="reminderList" class="timeline"></div>
+      </section>
+
+      <section id="reviews" class="view">
+        <div class="topline">
+          <div>
+            <h1>待确认</h1>
+            <p>高风险记忆、feel、承诺和边界先在这里过一遍。</p>
+          </div>
+        </div>
+        <div id="reviewList" class="stack"></div>
+      </section>
+
+      <section id="console" class="view">
+        <div class="topline">
+          <div>
+            <h1>控制台</h1>
+            <p>连接状态、Hermes 状态和系统日志。</p>
+          </div>
+        </div>
+        <pre id="statusBlock" class="code"></pre>
+        <div id="logList" class="stack"></div>
+      </section>
+    </section>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+data/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local agent/config sandboxes. Never commit OAuth/session material.
+.agents/
+.codex/
+.hermes/
+
+# Runtime logs and databases.
+*.log
+*.sqlite
+*.sqlite3
+*.db
