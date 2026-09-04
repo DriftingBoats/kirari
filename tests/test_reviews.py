@@ -8,8 +8,7 @@ import asyncio
 
 def test_promise_review_writes_pinned_file(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
-    monkeypatch.setenv("HERMES_GATEWAY_SERVICE", "")
+    monkeypatch.setenv("KIRARI_MEMORY_DIR", str(tmp_path / "memory"))
 
     import app.config as config
     import app.db as database

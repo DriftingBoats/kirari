@@ -1,7 +1,7 @@
 [project]
 name = "kirari"
 version = "0.1.0"
-description = "Telegram-first companion layer on top of Hermes Agent"
+description = "Private companion agent powered by a local Codex subscription login"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.115.0",
@@ -10,6 +10,8 @@ dependencies = [
   "pydantic>=2.7.0",
   "python-dotenv>=1.0.1",
   "python-multipart>=0.0.9",
+  "PyYAML>=6.0.2",
+  "rapidfuzz>=3.9.0",
 ]
 
 [project.optional-dependencies]

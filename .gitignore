@@ -24,3 +24,7 @@ build/
 *.sqlite
 *.sqlite3
 *.db
+
+# Local UI review artifacts and disposable browser profiles.
+.tmp-*/
+.tmp-*.png

@@ -6,17 +6,25 @@ import time
 import uuid
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .agent import ask_agent, runtime_status
+from .companion import generate_companion_reply
 from .config import settings
-from .db import db, init_db, row_to_dict, rows_to_dicts, upsert_memory_item
-from .dream import run_dream
-from .hermes_client import ask_hermes, hermes_available
-from .hermes_sessions import import_hermes_telegram_sessions
+from .db import db, init_db, row_to_dict, rows_to_dicts
+from .dream import dream_loop, run_dream
+from .embeddings import (
+    embedding_status,
+    embedding_worker_loop,
+    process_embedding_queue,
+    reconcile_embedding_jobs,
+)
 from .memory_files import (
     MEMORY_FILES,
     append_memory_file,
@@ -27,29 +35,53 @@ from .memory_files import (
     restore_file_version,
     write_memory_file,
 )
-from .reminders import reminder_loop
-from .retrieval import recent_telegram_context, recall_memories, render_recalled, simple_embedding
+from .proactive import proactive_loop, run_proactive_once
+from .reminders import reminder_loop, snooze
+from .retrieval import (
+    conversation_is_cold,
+    recent_telegram_context,
+    recall_memories_with_codex,
+    render_recalled,
+    surface_memories,
+)
+from .memory_store import find_bucket_paths, persist_bucket, reconcile_memory_store
+from .memory_service import (
+    get_memory,
+    reinforce_memory as reinforce_memory_record,
+    restore_memory as restore_memory_record,
+    save_memory_candidate,
+    tombstone_memory,
+)
+from .memory_lifecycle import memory_decay_loop, memory_lifecycle_status, run_memory_decay
 from .schemas import BoardCreate, CalendarCreate, ChatRequest, FileUpdate, ReminderCreate, ReviewAction
-from .telegram import send_message, telegram_webhook
+from .telegram import save_telegram_message, send_message, telegram_polling_loop, telegram_webhook
 from .telegram_webapp import TelegramWebAppAuthError, validate_init_data
 
-_reminder_task = None
+_background_tasks: list[asyncio.Task] = []
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     ensure_memory_files()
-    global _reminder_task
-    import asyncio
-
-    _reminder_task = asyncio.create_task(reminder_loop(send_message))
+    await asyncio.to_thread(reconcile_memory_store)
+    global _background_tasks
+    _background_tasks = [
+        asyncio.create_task(reminder_loop(send_message)),
+        asyncio.create_task(dream_loop()),
+        asyncio.create_task(proactive_loop(send_message)),
+        asyncio.create_task(memory_decay_loop()),
+        asyncio.create_task(embedding_worker_loop()),
+    ]
+    if settings.telegram_bot_token and settings.telegram_mode == "polling":
+        _background_tasks.append(asyncio.create_task(telegram_polling_loop()))
     yield
-    if _reminder_task:
-        _reminder_task.cancel()
+    for task in _background_tasks:
+        task.cancel()
+    await asyncio.gather(*_background_tasks, return_exceptions=True)
 
 
-app = FastAPI(title="Aion Hermes Telegram", lifespan=lifespan)
+app = FastAPI(title="Kirari Companion", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent.parent / "static")), name="static")
 
 
@@ -111,13 +143,21 @@ async def auth_status():
 @app.get("/api/status")
 async def status():
     return {
-        "hermes_available": hermes_available(),
-        "hermes_bin": settings.hermes_bin,
-        "hermes_home": str(settings.hermes_home),
-        "hermes_sessions_dir": str(settings.hermes_home / "sessions"),
+        "runtime": await asyncio.to_thread(runtime_status),
+        "memory_index": embedding_status(),
+        "memory_lifecycle": memory_lifecycle_status(),
         "memory_dir": str(settings.memory_dir),
         "telegram_configured": bool(settings.telegram_bot_token),
+        "telegram_mode": settings.telegram_mode,
         "db_path": str(settings.db_path),
+        "proactive": {
+            "enabled": settings.proactive_enabled,
+            "idle_hours": settings.proactive_idle_hours,
+            "cooldown_hours": settings.proactive_cooldown_hours,
+            "quiet_hours": [settings.proactive_quiet_start, settings.proactive_quiet_end],
+        },
+        "scheduled_dream": {"enabled": settings.dream_schedule_enabled, "hour": settings.dream_hour},
+        "timezone": settings.app_timezone,
     }
 
 
@@ -128,10 +168,57 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str | None 
 
 @app.post("/api/chat/test")
 async def test_chat(body: ChatRequest):
-    recalled = render_recalled(recall_memories(body.text))
+    recalled_items = await recall_memories_with_codex(body.text)
+    recalled = render_recalled(recalled_items)
     recent = recent_telegram_context(body.chat_id, settings.recent_message_limit) if body.chat_id else ""
-    result = await ask_hermes(body.text, recent_context=recent, recalled_context=recalled)
+    result = await ask_agent(body.text, recent_context=recent, recalled_context=recalled)
     return {"ok": result.ok, "text": result.text, "stderr": result.stderr, "returncode": result.returncode}
+
+
+@app.post("/api/chat")
+async def local_chat(body: ChatRequest):
+    chat_id = body.chat_id or -1
+    cold_start = conversation_is_cold(chat_id)
+    incoming_id = save_telegram_message(
+        telegram_message_id=None,
+        chat_id=chat_id,
+        user_id=0,
+        direction="in",
+        text=body.text,
+        raw={"source": "web"},
+    )
+    recalled_items = await recall_memories_with_codex(body.text)
+    if cold_start:
+        recalled_ids = {str(item["id"]) for item in recalled_items}
+        recalled_items.extend(
+            item for item in surface_memories()
+            if str(item["id"]) not in recalled_ids
+        )
+    recalled = render_recalled(recalled_items)
+    recent = recent_telegram_context(
+        chat_id, settings.recent_message_limit, exclude_row_id=incoming_id
+    )
+    result = await generate_companion_reply(
+        body.text,
+        recent_context=recent,
+        recalled_context=recalled,
+        recalled_items=recalled_items,
+        source_message_ids=[incoming_id],
+    )
+    save_telegram_message(
+        telegram_message_id=None,
+        chat_id=chat_id,
+        user_id=0,
+        direction="out",
+        text=result.text,
+        raw={
+            "source": "web",
+            "codex_ok": result.ok,
+            "review_ids": result.data.get("review_ids", []),
+            "reinforced_memory_ids": result.data.get("reinforced_memory_ids", []),
+        },
+    )
+    return {"ok": result.ok, "text": result.text, "review_ids": result.data.get("review_ids", [])}
 
 
 @app.get("/api/files")
@@ -157,8 +244,7 @@ async def put_file(filename: str, body: FileUpdate):
         write_memory_file(filename, body.content)
     except ValueError:
         raise HTTPException(status_code=404, detail="unknown file")
-    reload_result = await _reload_hermes_context()
-    return {"ok": True, "reload": reload_result}
+    return {"ok": True, "context_refreshed": True}
 
 
 @app.get("/api/files/{filename}/versions")
@@ -175,63 +261,67 @@ async def restore_file(filename: str, version_id: int):
         restore_file_version(filename, version_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="unknown file version")
-    reload_result = await _reload_hermes_context()
-    return {"ok": True, "reload": reload_result}
+    return {"ok": True, "context_refreshed": True}
 
 
 @app.get("/api/messages")
-async def messages(limit: int = 100):
-    import_hermes_telegram_sessions()
+async def messages(limit: int = 100, chat_id: int | None = None):
     with db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM telegram_messages ORDER BY created_at DESC LIMIT ?",
-            (min(limit, 500),),
-        ).fetchall()
+        if chat_id is None:
+            rows = conn.execute(
+                "SELECT * FROM telegram_messages ORDER BY created_at DESC LIMIT ?",
+                (min(limit, 500),),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM telegram_messages WHERE chat_id=? ORDER BY created_at DESC LIMIT ?",
+                (chat_id, min(limit, 500)),
+            ).fetchall()
     return list(reversed(rows_to_dicts(rows)))
 
 
-@app.post("/api/import/hermes-sessions")
-async def import_hermes_sessions():
-    return {"ok": True, **import_hermes_telegram_sessions()}
-
-
-async def _reload_hermes_context():
-    ensure_memory_files()
-    if not settings.hermes_gateway_service:
-        return {"ok": False, "message": "Hermes gateway service is not configured."}
-    proc = await asyncio.create_subprocess_exec(
-        "systemctl",
-        "--user",
-        "restart",
-        settings.hermes_gateway_service,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=(stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace")).strip()
-            or "failed to restart Hermes gateway",
-        )
-    return {"ok": True, "service": settings.hermes_gateway_service}
-
-
-@app.post("/api/hermes/reload-context")
-async def reload_hermes_context():
-    return await _reload_hermes_context()
-
-
 @app.get("/api/memories")
-async def memories(q: str = "", limit: int = 100):
+async def memories(
+    q: str = "",
+    limit: int = 100,
+    domain: str = "",
+    tags: str = "",
+    date_from: float | None = None,
+    date_to: float | None = None,
+    importance_min: float = 0.0,
+    include_archived: bool = True,
+):
     if q:
-        return recall_memories(q, limit=min(limit, 50))
+        return await recall_memories_with_codex(
+            q,
+            limit=min(limit, 50),
+            include_archived=include_archived,
+            domain=domain,
+            tags=[tag.strip() for tag in tags.split(",") if tag.strip()],
+            date_from=date_from,
+            date_to=date_to,
+            importance_min=max(0.0, min(1.0, importance_min)),
+        )
     with db() as conn:
         rows = conn.execute(
-            "SELECT * FROM memory_items ORDER BY importance DESC, updated_at DESC LIMIT ?",
+            """
+            SELECT * FROM memory_items WHERE tombstoned=0
+            ORDER BY archived ASC, pinned DESC, importance DESC, updated_at DESC LIMIT ?
+            """,
             (min(limit, 500),),
         ).fetchall()
     return rows_to_dicts(rows)
+
+
+@app.get("/api/memories/feel/search")
+async def search_feelings(q: str, limit: int = 20):
+    return await recall_memories_with_codex(
+        q,
+        limit=min(max(limit, 1), 50),
+        include_archived=True,
+        include_special=True,
+        memory_type="feel",
+    )
 
 
 @app.post("/api/memories")
@@ -248,16 +338,156 @@ async def create_memory(body: dict):
         "text": text,
         "importance": float(body.get("importance", 0.5)),
         "emotional_weight": float(body.get("emotional_weight", 0.0)),
+        "valence": float(body.get("valence", 0.5)),
+        "arousal": float(body.get("arousal", body.get("emotional_weight", 0.3))),
+        "pinned": int(body.get("pinned", body.get("type") == "pinned")),
+        "summary": str(body.get("summary", "")),
+        "domains": body.get("domains", []),
+        "tags": body.get("tags", []),
+        "entities": body.get("entities", []),
+        "why_remembered": str(body.get("why_remembered", "")),
         "approved": int(body.get("approved", 1)),
         "resolved": int(body.get("resolved", 0)),
         "created_at": now,
         "updated_at": now,
-        "embedding_json": json.dumps(simple_embedding(text), ensure_ascii=False),
+        "embedding_json": None,
     }
-    upsert_memory_item(item)
-    append_memory_file("MEMORY.md", item["title"] or item["type"], text)
-    reload_result = await _reload_hermes_context()
-    return {"ok": True, "id": mem_id, "reload": reload_result}
+    saved = await save_memory_candidate(
+        item,
+        source_message_ids=[int(value) for value in body.get("source_message_ids", [])],
+        allow_merge=bool(body.get("allow_merge", True)),
+    )
+    return {
+        "ok": True,
+        "id": saved["item"]["id"],
+        "created": saved["created"],
+        "merged_into": saved["merged_into"],
+        "context_refreshed": True,
+    }
+
+
+@app.patch("/api/memories/{memory_id}")
+async def update_memory(memory_id: str, body: dict):
+    allowed = {
+        "title", "text", "importance", "emotional_weight", "valence", "arousal",
+        "resolved", "approved", "pinned", "archived", "summary", "domains_json",
+        "tags_json", "entities_json", "why_remembered",
+    }
+    updates = {key: value for key, value in body.items() if key in allowed}
+    if not updates:
+        return {"ok": True}
+    item = get_memory(memory_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="not found")
+    item.update(updates)
+    item["embedding_json"] = None
+    await asyncio.to_thread(persist_bucket, item, "edited")
+    return {"ok": True}
+
+
+@app.post("/api/memories/{memory_id}/reinforce")
+async def reinforce_memory(memory_id: str):
+    """Explicitly reinforce a memory after it proved useful.
+
+    Retrieval itself intentionally stays read-only.
+    """
+    reinforced = await asyncio.to_thread(reinforce_memory_record, memory_id)
+    if not reinforced:
+        raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True, "reinforced": True}
+
+
+@app.post("/api/memories/{memory_id}/restore")
+async def restore_memory(memory_id: str):
+    restored = await asyncio.to_thread(restore_memory_record, memory_id)
+    if not restored:
+        raise HTTPException(status_code=404, detail="not found or tombstoned")
+    return {"ok": True, "restored": True}
+
+
+@app.get("/api/memories/{memory_id}/trace")
+async def trace_memory(memory_id: str):
+    item = get_memory(memory_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="not found")
+    try:
+        source_ids = [int(value) for value in json.loads(item.get("source_message_ids") or "[]")]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        source_ids = []
+    source_messages: list[dict] = []
+    if source_ids:
+        placeholders = ",".join("?" for _ in source_ids)
+        with db() as conn:
+            source_messages = rows_to_dicts(
+                conn.execute(
+                    f"SELECT id, direction, text, created_at FROM telegram_messages WHERE id IN ({placeholders}) ORDER BY created_at",
+                    source_ids,
+                ).fetchall()
+            )
+    paths = find_bucket_paths(memory_id)
+    return {
+        "memory": item,
+        "source_messages": source_messages,
+        "footprints": json.loads(item.get("footprints_json") or "[]"),
+        "lineage": json.loads(item.get("lineage_json") or "{}"),
+        "bucket_path": str(paths[0]) if paths else "",
+    }
+
+
+@app.get("/api/memories/surface")
+async def surface_memory(limit: int = 3):
+    return await asyncio.to_thread(surface_memories, min(max(limit, 1), 20))
+
+
+@app.post("/api/memories/decay")
+async def memory_decay(body: dict):
+    return await asyncio.to_thread(run_memory_decay, apply=bool(body.get("apply", False)))
+
+
+@app.post("/api/memory-index/reindex")
+async def reindex_memories(body: dict):
+    queued = await asyncio.to_thread(
+        reconcile_embedding_jobs, force=bool(body.get("force", False))
+    )
+    processed = 0
+    if bool(body.get("wait", False)):
+        processed = await process_embedding_queue(limit=min(int(body.get("limit", 100)), 500))
+    return {"ok": True, "queued": queued, "processed": processed, "index": embedding_status()}
+
+
+@app.delete("/api/memories/{memory_id}")
+async def delete_memory(memory_id: str):
+    deleted = await asyncio.to_thread(tombstone_memory, memory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True, "tombstoned": True, "recoverable": True}
+
+
+@app.post("/api/messages/{message_id}/pin")
+async def pin_message(message_id: int, body: dict):
+    target = str(body.get("target", "memory")).lower()
+    if target not in {"memory", "pinned"}:
+        raise HTTPException(status_code=400, detail="invalid target")
+    with db() as conn:
+        row = conn.execute("SELECT text FROM telegram_messages WHERE id=?", (message_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="message not found")
+    text = str(row["text"]).strip()
+    heading = str(body.get("title") or f"Pinned message {message_id}")
+    if target == "pinned":
+        append_memory_file("PINNED.md", heading, text)
+    created = await create_memory(
+        {
+            "type": "pinned",
+            "title": heading,
+            "text": text,
+            "importance": 1.0,
+            "pinned": 1,
+            "source_message_ids": [message_id],
+            "allow_merge": False,
+        }
+    )
+    return {"ok": True, "target": "bucket", "id": created["id"]}
 
 
 @app.get("/api/board")
@@ -279,8 +509,7 @@ async def create_board(body: BoardCreate):
             (item_id, body.author, body.text, body.source, 1, now),
         )
     append_memory_file("BOARD.md", f"{body.author} {time.strftime('%Y-%m-%d')}", body.text)
-    reload_result = await _reload_hermes_context()
-    return {"ok": True, "id": item_id, "reload": reload_result}
+    return {"ok": True, "id": item_id, "context_refreshed": True}
 
 
 @app.patch("/api/board/{item_id}")
@@ -358,6 +587,10 @@ async def create_reminder(body: ReminderCreate):
 
 @app.patch("/api/reminders/{item_id}")
 async def update_reminder(item_id: str, body: dict):
+    if "snooze_seconds" in body:
+        if not snooze(item_id, int(body["snooze_seconds"])):
+            raise HTTPException(status_code=404, detail="not found")
+        return {"ok": True, "snoozed": True}
     status = body.get("status")
     if status not in {"pending", "done", "sent", "cancelled"}:
         raise HTTPException(status_code=400, detail="invalid status")
@@ -386,11 +619,70 @@ async def _approve_review(row) -> None:
     heading = str(payload.get("title") or payload.get("kind") or kind).strip().title()
     if kind == "feel":
         append_memory_file("FEEL.md", f"Reviewed {heading}", text)
-        await _reload_hermes_context()
+        await save_memory_candidate(
+            {
+                "type": "feel", "title": heading, "text": text,
+                "importance": payload.get("importance", 0.7),
+                "valence": payload.get("valence", 0.5),
+                "arousal": payload.get("arousal", 0.5),
+                "summary": payload.get("summary", ""),
+                "domains": payload.get("domains", ["relationship"]),
+                "tags": payload.get("tags", ["feel"]),
+                "entities": payload.get("entities", []),
+                "why_remembered": payload.get("why_remembered", ""),
+            },
+            source_message_ids=payload.get("source_message_ids", []),
+            allow_merge=False,
+        )
         return
     if kind in {"promise", "boundary"}:
         append_memory_file("PINNED.md", f"Reviewed {heading}", text)
-        await _reload_hermes_context()
+        await save_memory_candidate(
+            {
+                "type": kind, "title": heading, "text": text,
+                "importance": 1.0, "pinned": 1,
+                "summary": payload.get("summary", ""),
+                "domains": payload.get("domains", ["relationship"]),
+                "tags": payload.get("tags", [kind]),
+                "entities": payload.get("entities", []),
+                "why_remembered": payload.get("why_remembered", "user approved"),
+            },
+            source_message_ids=payload.get("source_message_ids", []),
+            allow_merge=False,
+        )
+        return
+    if kind in {"reminder", "calendar"}:
+        raw_when = str(payload.get("when", "")).strip()
+        try:
+            when = datetime.fromisoformat(raw_when.replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                try:
+                    when = when.replace(tzinfo=ZoneInfo(settings.app_timezone))
+                except ZoneInfoNotFoundError:
+                    when = when.astimezone()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="review item has invalid time") from exc
+        if kind == "reminder":
+            await create_reminder(
+                ReminderCreate(
+                    title=heading,
+                    description=text,
+                    remind_at=when.timestamp(),
+                    repeat_rule=str(payload.get("repeat_rule", "")),
+                    source="chat-review",
+                )
+            )
+        else:
+            await create_calendar(
+                CalendarCreate(
+                    layer=str(payload.get("layer") or "life"),
+                    title=heading,
+                    description=text,
+                    starts_at=when.timestamp(),
+                    source="chat-review",
+                    confirmed=True,
+                )
+            )
         return
     await create_memory(
         {
@@ -398,7 +690,15 @@ async def _approve_review(row) -> None:
             "title": payload.get("title") or payload.get("kind") or "reviewed",
             "text": text,
             "importance": payload.get("importance", 0.6),
-            "emotional_weight": payload.get("emotional_weight", 0.0),
+            "emotional_weight": payload.get("arousal", 0.3),
+            "valence": payload.get("valence", 0.5),
+            "arousal": payload.get("arousal", 0.3),
+            "summary": payload.get("summary", ""),
+            "domains": payload.get("domains", []),
+            "tags": payload.get("tags", []),
+            "entities": payload.get("entities", []),
+            "why_remembered": payload.get("why_remembered", ""),
+            "source_message_ids": payload.get("source_message_ids", []),
         }
     )
 
@@ -411,19 +711,22 @@ async def review_action(review_id: str, body: ReviewAction):
         row = conn.execute("SELECT * FROM pending_reviews WHERE id=?", (review_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="not found")
-        status = "approved" if body.action == "approve" else "rejected"
-        conn.execute("UPDATE pending_reviews SET status=?, updated_at=? WHERE id=?", (status, time.time(), review_id))
     if body.action == "approve":
         await _approve_review(row)
+    status = "approved" if body.action == "approve" else "rejected"
+    with db() as conn:
+        conn.execute("UPDATE pending_reviews SET status=?, updated_at=? WHERE id=?", (status, time.time(), review_id))
     return {"ok": True}
 
 
 @app.post("/api/dream/run")
 async def dream_run():
-    result = await run_dream("manual")
-    if result.get("ok"):
-        result["reload"] = await _reload_hermes_context()
-    return result
+    return await run_dream("manual")
+
+
+@app.post("/api/proactive/run")
+async def proactive_run():
+    return await run_proactive_once(send_message)
 
 
 @app.get("/api/logs")

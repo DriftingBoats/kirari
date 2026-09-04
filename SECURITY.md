@@ -6,10 +6,9 @@ is the main risk.
 ## Do Not Commit
 
 - `.env`
-- `~/.hermes/.env`
-- `~/.hermes/auth.json`
+- `~/.codex/auth.json`
 - Telegram bot tokens
-- OAuth access or refresh tokens
+- ChatGPT/Codex access or refresh tokens
 - API keys
 - local SQLite databases
 - pairing records
@@ -25,6 +24,12 @@ rg -n --hidden \
 ```
 
 Expected matches should only be templates, documentation, or variable names.
+
+## External Embedding Privacy
+
+Enabling Gemini embeddings sends memory text to Google's Gemini API. Free-tier
+data may be used to improve Google's products. Leave
+`GEMINI_EMBEDDING_ENABLED=false` for memories that must not leave the machine.
 
 ## If You Leak A Secret
 

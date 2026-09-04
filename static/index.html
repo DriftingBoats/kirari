@@ -2,161 +2,215 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kirari</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f7f1">
+  <title>Kirari · きらり</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
+
   <div class="auth-panel" id="authPanel" hidden>
     <form id="authForm" class="auth-box">
-      <h1>Kirari</h1>
-      <p>输入访问密钥。</p>
-      <input id="accessKeyInput" type="password" autocomplete="current-password" placeholder="Access key">
-      <button class="primary">进入</button>
+      <div class="auth-mark" aria-hidden="true"><span></span></div>
+      <p class="eyebrow">PRIVATE SPACE</p>
+      <h1>欢迎回来</h1>
+      <p>输入访问密钥，回到你和 Kirari 的空间。</p>
+      <label class="field">
+        <span>访问密钥</span>
+        <input id="accessKeyInput" type="password" autocomplete="current-password" placeholder="输入密钥" required>
+      </label>
+      <button class="primary" type="submit">进入 Kirari</button>
     </form>
   </div>
+
   <main class="shell">
-    <aside class="rail">
+    <aside class="rail" aria-label="主导航">
       <div class="brand">
-        <span class="mark"></span>
+        <span class="mark" aria-hidden="true"><i></i></span>
         <div>
           <strong>Kirari</strong>
-          <small>Telegram Mini App</small>
+          <small>きらり · companion</small>
         </div>
       </div>
-      <nav class="nav">
-        <button data-tab="dashboard" class="active">总览</button>
-        <button data-tab="files">灵魂与记忆</button>
-        <button data-tab="board">留言板</button>
-        <button data-tab="calendar">日历</button>
-        <button data-tab="reminders">提醒</button>
-        <button data-tab="reviews">待确认</button>
-        <button data-tab="console">控制台</button>
+
+      <nav class="nav" aria-label="功能">
+        <button data-tab="dashboard" class="active" aria-current="page"><span>01</span>总览</button>
+        <button data-tab="chat"><span>02</span>聊天</button>
+        <button data-tab="files"><span>03</span>记忆</button>
+        <button data-tab="board"><span>04</span>留言板</button>
+        <button data-tab="calendar"><span>05</span>日历</button>
+        <button data-tab="reminders"><span>06</span>提醒</button>
+        <button data-tab="reviews"><span>07</span>待确认</button>
+        <button data-tab="console"><span>08</span>控制台</button>
       </nav>
-      <div class="rail-foot" id="statusPill">检查中</div>
-      <button class="ghost rail-auth" id="clearAccessKeyBtn">重置密钥</button>
+
+      <div class="rail-bottom">
+        <div class="rail-foot" id="statusPill" role="status"><i aria-hidden="true"></i><span>正在检查</span></div>
+        <button class="quiet rail-auth" id="clearAccessKeyBtn">重置访问密钥</button>
+      </div>
     </aside>
 
-    <section class="workspace">
-      <section id="dashboard" class="view active">
-        <div class="topline">
+    <section class="workspace" id="mainContent">
+      <section id="dashboard" class="view active" aria-labelledby="dashboardTitle">
+        <header class="page-head dashboard-head">
           <div>
-            <h1>今日</h1>
-            <p>这里收束聊天、记忆、留言、日历和提醒。</p>
+            <p class="eyebrow" id="currentDate">TODAY</p>
+            <h1 id="dashboardTitle">今天过得<br>怎么样？</h1>
+            <p class="lead">对话、记忆和生活里的小事，都在这里。</p>
           </div>
-          <div class="actions">
-            <button class="ghost" id="syncHermesBtn">同步 Hermes</button>
-            <button class="primary" id="runDreamBtn">运行 dream</button>
+          <div class="day-block" aria-hidden="true">
+            <span>DAILY LOG</span>
+            <b id="dateDigits">09—04</b>
+            <i>きらり</i>
           </div>
+        </header>
+
+        <div class="dashboard-actions">
+          <button class="primary" id="runDreamBtn">整理今日记忆</button>
+          <button class="secondary" id="testCodexBtn">检查 Codex</button>
         </div>
-        <div class="overview">
-          <div class="metric"><span id="metricMessages">0</span><small>消息</small></div>
-          <div class="metric"><span id="metricBoard">0</span><small>留言</small></div>
-          <div class="metric"><span id="metricReminders">0</span><small>提醒</small></div>
-          <div class="metric"><span id="metricReviews">0</span><small>待确认</small></div>
+
+        <div class="overview" aria-label="今日概览">
+          <div class="metric"><small>消息</small><span id="metricMessages">0</span></div>
+          <div class="metric"><small>留言</small><span id="metricBoard">0</span></div>
+          <div class="metric"><small>提醒</small><span id="metricReminders">0</span></div>
+          <div class="metric accent"><small>待确认</small><span id="metricReviews">0</span></div>
         </div>
-        <div class="band">
-          <h2>最近消息</h2>
+
+        <section class="band" aria-labelledby="recentTitle">
+          <div class="section-title">
+            <div><p class="eyebrow">RECENT</p><h2 id="recentTitle">最近说过的话</h2></div>
+            <button class="text-link" type="button" data-jump="chat">继续聊天 <span aria-hidden="true">→</span></button>
+          </div>
           <div id="recentMessages" class="timeline"></div>
-        </div>
+        </section>
       </section>
 
-      <section id="files" class="view">
+      <section id="chat" class="view chat-view" aria-labelledby="chatTitle">
+        <header class="page-head compact-head">
+          <div>
+            <p class="eyebrow">CONVERSATION</p>
+            <h1 id="chatTitle">和 Kirari 说话</h1>
+            <p class="lead">网页和 Telegram 共用人格与长期记忆。</p>
+          </div>
+          <span class="presence"><i aria-hidden="true"></i>在这里</span>
+        </header>
+        <div id="localChatList" class="timeline chat-list" aria-live="polite"></div>
+        <form class="composer chat-composer" id="chatForm">
+          <label class="sr-only" for="chatText">消息</label>
+          <input id="chatText" maxlength="12000" autocomplete="off" placeholder="现在想说些什么？" required>
+          <button class="primary" type="submit">发送</button>
+        </form>
+      </section>
+
+      <section id="files" class="view" aria-labelledby="memoryTitle">
+        <header class="page-head compact-head memory-heading">
+          <div>
+            <p class="eyebrow">INNER NOTES</p>
+            <h1 id="memoryTitle">灵魂与记忆</h1>
+            <p class="lead">这些文字决定 Kirari 如何理解你们共同经历的事。</p>
+          </div>
+        </header>
         <div class="split">
-          <div class="file-list" id="fileList"></div>
+          <aside class="file-list" id="fileList" aria-label="记忆文件"></aside>
           <div class="editor">
             <div class="editor-head">
-              <h1 id="currentFile">SOUL.md</h1>
-              <button class="primary" id="saveFileBtn">保存</button>
+              <div><p class="eyebrow">EDITING</p><h2 id="currentFile">SOUL.md</h2></div>
+              <button class="primary" id="saveFileBtn">保存更改</button>
             </div>
+            <label class="sr-only" for="fileEditor">文件内容</label>
             <textarea id="fileEditor" spellcheck="false"></textarea>
             <div class="version-panel">
-              <h2>版本</h2>
+              <div class="section-title"><h2>历史版本</h2><small>随时回到之前的状态</small></div>
               <div id="fileVersions" class="stack compact"></div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="board" class="view">
-        <div class="topline">
+      <section id="board" class="view" aria-labelledby="boardTitle">
+        <header class="page-head compact-head">
           <div>
-            <h1>留言板</h1>
-            <p>你们不在同一时间说出口的话。</p>
+            <p class="eyebrow">LEAVE A NOTE</p>
+            <h1 id="boardTitle">留言板</h1>
+            <p class="lead">把没能在同一时间说出口的话，留在这里。</p>
           </div>
-        </div>
-        <form class="composer" id="boardForm">
-          <select id="boardAuthor">
-            <option value="user">我</option>
-            <option value="ai">TA</option>
-          </select>
-          <input id="boardText" placeholder="写一条留言">
-          <button class="primary">留下</button>
+        </header>
+        <form class="composer form-strip" id="boardForm">
+          <label class="field compact-field"><span>署名</span><select id="boardAuthor"><option value="user">我</option><option value="ai">Kirari</option></select></label>
+          <label class="field compact-field grow"><span>留言</span><input id="boardText" placeholder="写下一句话" required></label>
+          <button class="primary" type="submit">留下这句话</button>
         </form>
         <div id="boardList" class="masonry"></div>
       </section>
 
-      <section id="calendar" class="view">
-        <div class="topline">
+      <section id="calendar" class="view" aria-labelledby="calendarTitle">
+        <header class="page-head compact-head">
           <div>
-            <h1>日历</h1>
-            <p>生活、关系和工作放在同一个时间线里。</p>
+            <p class="eyebrow">CALENDAR</p>
+            <h1 id="calendarTitle">一起经过的日子</h1>
+            <p class="lead">生活、关系与工作，都在同一条时间线上发生。</p>
           </div>
-        </div>
+        </header>
         <form class="grid-form" id="calendarForm">
-          <select id="calLayer">
-            <option value="life">生活</option>
-            <option value="relationship">关系</option>
-            <option value="work">工作</option>
-          </select>
-          <input id="calTitle" placeholder="事件标题">
-          <input id="calWhen" type="datetime-local">
-          <input id="calDesc" placeholder="备注">
-          <button class="primary">添加</button>
+          <label class="field"><span>分类</span><select id="calLayer"><option value="life">生活</option><option value="relationship">关系</option><option value="work">工作</option></select></label>
+          <label class="field"><span>事件</span><input id="calTitle" placeholder="发生什么事？" required></label>
+          <label class="field"><span>时间</span><input id="calWhen" type="datetime-local" required></label>
+          <label class="field"><span>备注</span><input id="calDesc" placeholder="可以留空"></label>
+          <button class="primary" type="submit">加入日历</button>
         </form>
-        <div id="calendarList" class="timeline"></div>
+        <div id="calendarList" class="timeline event-list"></div>
       </section>
 
-      <section id="reminders" class="view">
-        <div class="topline">
+      <section id="reminders" class="view" aria-labelledby="reminderTitle">
+        <header class="page-head compact-head">
           <div>
-            <h1>提醒</h1>
-            <p>到点由 Telegram 推送，也会留在这里。</p>
+            <p class="eyebrow">REMINDERS</p>
+            <h1 id="reminderTitle">别忘了这件事</h1>
+            <p class="lead">时间到了，Kirari 会从 Telegram 轻轻提醒你。</p>
           </div>
-        </div>
+        </header>
         <form class="grid-form" id="reminderForm">
-          <input id="remTitle" placeholder="提醒内容">
-          <input id="remWhen" type="datetime-local">
-          <input id="remDesc" placeholder="备注">
-          <button class="primary">添加</button>
+          <label class="field"><span>提醒</span><input id="remTitle" placeholder="需要记住什么？" required></label>
+          <label class="field"><span>时间</span><input id="remWhen" type="datetime-local" required></label>
+          <label class="field"><span>备注</span><input id="remDesc" placeholder="可以留空"></label>
+          <label class="field"><span>重复</span><select id="remRepeat"><option value="">不重复</option><option value="daily">每天</option><option value="weekly">每周</option><option value="monthly">每月</option></select></label>
+          <button class="primary" type="submit">设好提醒</button>
         </form>
-        <div id="reminderList" class="timeline"></div>
+        <div id="reminderList" class="timeline event-list"></div>
       </section>
 
-      <section id="reviews" class="view">
-        <div class="topline">
+      <section id="reviews" class="view" aria-labelledby="reviewTitle">
+        <header class="page-head compact-head">
           <div>
-            <h1>待确认</h1>
-            <p>高风险记忆、feel、承诺和边界先在这里过一遍。</p>
+            <p class="eyebrow">YOUR DECISION</p>
+            <h1 id="reviewTitle">由你确认</h1>
+            <p class="lead">重要记忆、感受、承诺和边界，先经过你的同意。</p>
           </div>
-        </div>
-        <div id="reviewList" class="stack"></div>
+        </header>
+        <div id="reviewList" class="stack review-list"></div>
       </section>
 
-      <section id="console" class="view">
-        <div class="topline">
+      <section id="console" class="view" aria-labelledby="consoleTitle">
+        <header class="page-head compact-head">
           <div>
-            <h1>控制台</h1>
-            <p>连接状态、Hermes 状态和系统日志。</p>
+            <p class="eyebrow">SYSTEM</p>
+            <h1 id="consoleTitle">运行状态</h1>
+            <p class="lead">查看 Codex、向量索引、记忆生命周期与系统记录。</p>
           </div>
-        </div>
-        <pre id="statusBlock" class="code"></pre>
-        <div id="logList" class="stack"></div>
+        </header>
+        <details class="status-details" open>
+          <summary>Codex 运行信息</summary>
+          <pre id="statusBlock" class="code"></pre>
+        </details>
+        <div class="section-title log-title"><h2>系统记录</h2><small>最近发生的事件</small></div>
+        <div id="logList" class="stack log-list"></div>
       </section>
     </section>
   </main>
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="/static/app.js"></script>
 </body>
 </html>

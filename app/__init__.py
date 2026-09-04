@@ -1,1 +1,1 @@
-"""Aion Hermes Telegram application."""
+"""Kirari private companion application."""

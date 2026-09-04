@@ -33,7 +33,7 @@ def signed_init_data(bot_token: str, user_id: int, auth_date: int = 1_700_000_00
 
 def test_api_requires_access_key_when_configured(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    monkeypatch.setenv("KIRARI_MEMORY_DIR", str(tmp_path / "memory"))
     monkeypatch.setenv("KIRARI_ACCESS_KEY", "test-key")
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_ALLOWED_USER_IDS", raising=False)
@@ -69,7 +69,7 @@ def test_api_accepts_valid_telegram_mini_app_init_data(tmp_path, monkeypatch):
     bot_token = "123456:test-token"
     init_data = signed_init_data(bot_token, user_id=42)
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    monkeypatch.setenv("KIRARI_MEMORY_DIR", str(tmp_path / "memory"))
     monkeypatch.delenv("KIRARI_ACCESS_KEY", raising=False)
     monkeypatch.delenv("APP_ACCESS_KEY", raising=False)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", bot_token)

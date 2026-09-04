@@ -1,164 +1,122 @@
 # Kirari
 
-Kirari is a Telegram-first companion project built around
-[Hermes Agent](https://github.com/NousResearch/hermes-agent). Hermes stays the
-base agent/runtime. This repository adds a small, readable layer for companion
-memory, relationship reflection, a Telegram-facing control surface, and
-future Mini App workflows.
+Kirari is a private, Telegram-first companion agent powered by the Codex CLI login included with a ChatGPT plan. It does not use Hermes or an OpenAI API key. An optional Gemini API key is used only for semantic memory embeddings.
 
-The current codebase is intentionally small. It is meant to be a practical
-starting point for a personal AI companion rather than a large AionHome-style
-platform.
-
-## What This Project Does
-
-- Uses Hermes as the underlying agent/model runtime.
-- Supports Telegram chat as the primary interaction entry.
-- Provides a FastAPI service for webhook-style Telegram integration and Mini App
-  pages.
-- Keeps memory in readable Markdown files instead of opaque-only vector storage.
-- Adds `feel` and `dream` style reflection flows for relationship digestion.
-- Includes a message board, calendar-ready data model, and reminder-ready data
-  model.
-- Keeps high-impact generated memories reviewable before they become durable.
-- Avoids committing any real OAuth credentials, bot tokens, local databases, or
-  Hermes runtime state.
-
-## Project Status
-
-This is an early personal-companion scaffold. The repository contains the
-application layer and documentation, while your local Hermes installation,
-Telegram bot token, Codex/OAuth credentials, database, pairing records, and
-runtime memories stay outside git.
-
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the current development order.
-
-The production path I use is:
+The project deliberately separates the companion product from the model runtime:
 
 ```text
-Telegram -> Hermes Gateway -> Hermes Agent / Codex
+Telegram / local web chat
+          ↓
+Kirari (conversation, memory, reviews, schedules, safety)
+          ↓
+Codex CLI (`codex exec`, ChatGPT account login)
 ```
 
-The FastAPI app in this repo is for the companion control surface, Mini App
-experiments, webhook-compatible deployments, and the readable memory workflow.
+## What is included
 
-## Architecture
+- Stable, user-editable identity and relationship boundaries in Markdown.
+- Recent conversation context plus searchable long-term memory.
+- Pin any message into durable memory.
+- Daily `dream`/`feel` consolidation with structured output validation.
+- Review queue for inferred facts, promises, boundaries, reminders, and calendar events.
+- Optional proactive Telegram check-ins with idle time, cooldown, and quiet hours.
+- One-time and daily/weekly/monthly reminders, plus snooze.
+- Telegram Mini App/control panel and a local web chat.
+- Telegram long polling for a fully local setup; webhook mode remains available.
+- Local SQLite history, memory-file versioning, and rollback.
 
-```text
-kirari/
-├── app/
-│   ├── main.py          # FastAPI routes and Mini App API
-│   ├── telegram.py      # Telegram webhook handling
-│   ├── hermes_client.py # Hermes CLI adapter
-│   ├── memory_files.py  # Markdown memory file management
-│   ├── dream.py         # dream/feel reflection jobs
-│   ├── reminders.py     # reminder scheduling helpers
-│   ├── retrieval.py     # lightweight readable-memory retrieval
-│   ├── db.py            # SQLite schema and connection helpers
-│   ├── schemas.py       # API schemas
-│   └── config.py        # environment-driven settings
-├── static/
-│   ├── index.html       # Mini App/control panel shell
-│   ├── app.css
-│   └── app.js
-├── tests/
-│   └── test_memory_files.py
-├── .env.example         # safe template only, no secrets
-├── pyproject.toml
-└── README.md
-```
+Voice, image generation, avatars, and multiple companions are intentionally not in the core yet. The common companion foundations—identity, continuity, memory control, initiative, and user-visible governance—come first.
 
-## Memory Model
+## Codex subscription runtime
 
-Kirari keeps important state in plain Markdown files so the system is readable,
-auditable, and easy to edit by hand.
+Kirari starts `codex exec` in non-interactive, ephemeral, read-only mode. It reuses the login saved by `codex login`. Before each invocation Kirari removes inherited `OPENAI_API_KEY` and `CODEX_API_KEY` values so it cannot silently fall back to API billing.
 
-Default memory locations:
+This mode is appropriate for a private agent on a machine you control. Do not copy `~/.codex/auth.json` into a public deployment or commit it: it contains account access tokens. ChatGPT/Codex subscription usage and OpenAI API billing are separate products.
 
-```text
-~/.hermes/SOUL.md
-~/.hermes/memories/
-```
+## Requirements
 
-Recommended files:
+- Python 3.10+
+- Codex CLI
+- A ChatGPT account with Codex access
+- Optional: a Telegram bot from BotFather
 
-- `SOUL.md` - persona, values, tone, relationship boundaries. User-edited only.
-- `USER.md` - durable facts about the user.
-- `MEMORY.md` - durable shared history and long-term facts.
-- `FEEL.md` - first-person emotional sediment from recent interactions.
-- `DREAM.md` - daily reflection, consolidation, contradictions, and questions.
-- `PINNED.md` - promises, boundaries, hard rules, and never-forget items.
-- `BOARD.md` - curated message-board archive.
-
-`SOUL.md` uses Hermes' native profile root so Hermes and Kirari edit the same
-identity file. The other companion memory files live under `~/.hermes/memories/`.
-Mini App edits are versioned in the local SQLite database and can be restored.
-
-The intent is to keep the core identity and memory reviewable. Embeddings can
-be added later for search quality, but they should not replace the readable
-source of truth.
-
-## Dream / Feel Flow
-
-`feel` is the short-cycle reflection layer. It turns recent interaction into
-emotional continuity:
-
-- What changed in the relationship?
-- What did the user seem to care about?
-- What should be held gently next time?
-- What should not be overfit into permanent memory?
-
-`dream` is the stronger daily consolidation layer:
-
-- Summarizes the day.
-- Detects repeated patterns.
-- Proposes durable memories.
-- Flags contradictions or risky assumptions.
-- Creates review items instead of silently rewriting important identity state.
-
-This keeps Kirari from treating every message as permanent truth while still
-allowing the companion to feel continuous over time.
-
-## Telegram Modes
-
-There are two Telegram integration paths:
-
-### 1. Hermes Gateway
-
-This is the recommended base path.
+Verify subscription login:
 
 ```bash
-hermes gateway install
-hermes gateway start
-hermes gateway status
+codex login
+codex login status
 ```
 
-Configure Telegram in your local Hermes environment, usually:
+The status should say `Logged in using ChatGPT`. On Windows, Kirari prefers the native `codex.exe` over an older npm shim. You can always set `CODEX_BIN` to an explicit executable path.
 
-```text
-~/.hermes/.env
+## Install
+
+```bash
+git clone https://github.com/DriftingBoats/kirari.git
+cd kirari
+python -m venv .venv
 ```
 
-Example keys:
+Windows PowerShell:
 
-```env
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+macOS/Linux:
+
+```bash
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Minimum `.env` for local web chat:
+
+```dotenv
+APP_DATA_DIR=./data
+KIRARI_ACCESS_KEY=choose-a-long-random-value
+APP_TIMEZONE=Asia/Shanghai
+
+CODEX_BIN=codex
+CODEX_REASONING_EFFORT=low
+```
+
+Start Kirari:
+
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8080
+```
+
+Open <http://127.0.0.1:8080/>. The control panel shows whether Codex is installed and logged in with ChatGPT.
+
+## Telegram: local polling (recommended)
+
+Add these values to `.env`:
+
+```dotenv
 TELEGRAM_BOT_TOKEN=replace_me
-TELEGRAM_ALLOWED_USERS=123456789
-GATEWAY_ALLOW_ALL_USERS=false
+TELEGRAM_ALLOWED_USER_IDS=123456789
+TELEGRAM_MODE=polling
 ```
 
-Do not commit `~/.hermes/.env`.
+Restart Kirari. It removes an existing webhook and receives messages using Telegram long polling, entirely from this machine. Restrict `TELEGRAM_ALLOWED_USER_IDS`; an empty allowlist permits anyone who discovers the bot to use your Codex allowance.
 
-### 2. FastAPI Webhook
+Do not run polling and a webhook consumer for the same bot at the same time.
 
-This repo also includes a webhook handler if you deploy the FastAPI service
-directly:
+## Telegram: webhook mode
 
-```text
-POST /telegram/webhook
+Use this only when Kirari is running behind a public HTTPS URL on a machine where your Codex account is safely logged in:
+
+```dotenv
+BASE_URL=https://example.com
+TELEGRAM_MODE=webhook
+TELEGRAM_WEBHOOK_SECRET=replace-with-a-long-random-secret
 ```
 
-After deployment:
+Then register the webhook:
 
 ```bash
 curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
@@ -166,201 +124,102 @@ curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
   -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
 ```
 
-Use either long polling through Hermes Gateway or a webhook deployment. Do not
-run two consumers for the same Telegram bot unless you know exactly how updates
-are routed.
+## Memory model
 
-## Installation
+The readable source of truth defaults to `./data/memory/`:
 
-### Requirements
+- `SOUL.md` — identity, voice, values, and relationship style; user controlled.
+- `PINNED.md` — promises, boundaries, and non-negotiable rules; user controlled.
+- `USER.md` — stable facts about the user.
+- `MEMORY.md` — durable shared history.
+- `FEEL.md` — first-person relationship reflection, not objective fact.
+- `DREAM.md` — daily consolidation logs.
+- `BOARD.md` — message-board and proactive-message archive.
 
-- Python 3.10+
-- Hermes Agent installed and configured
-- A Telegram bot created with BotFather
-- A model provider configured for Hermes, such as Codex/OAuth or an API-key
-  provider
+Set `KIRARI_MEMORY_DIR` to store these elsewhere. Every prompt reads the current files, so edits take effect on the next reply without restarting a gateway.
 
-### Install Hermes
+Long-term event memory is stored as one Markdown bucket per record under `memory/buckets/{active,archive,tombstone}/{domain}/`. YAML frontmatter contains emotional coordinates, importance, activation, source message IDs, lineage, and footprints; the body preserves the memory text. These bucket files are canonical. SQLite, FTS, and vectors are disposable projections rebuilt from them at startup. Legacy SQLite-only memories are exported automatically without deleting their original rows.
 
-Follow the Hermes project documentation. A typical install is:
+Semantic memory follows an Ombre-Brain-style hybrid design. A disposable SQLite vector projection is generated by `gemini-embedding-001`. Documents use `RETRIEVAL_DOCUMENT`, queries use `RETRIEVAL_QUERY`, and 768-dimensional vectors are normalised before cosine comparison. Ranking combines Gemini cosine similarity, FTS5/BM25, Chinese bigrams, RapidFuzz, topic matches, importance, and memory vitality. Advanced queries can filter domain, tags, dates, minimum importance, and archive inclusion. If Gemini is unavailable, Kirari falls back to Codex subscription reranking and then local hybrid lexical retrieval.
+
+Add a free-tier Google AI Studio key to `.env` to enable true vector retrieval:
+
+```dotenv
+GEMINI_EMBEDDING_API_KEY=replace_me
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+GEMINI_EMBEDDING_DIMENSIONS=768
+```
+
+The free tier sends the indexed memory text to Google, and Google currently states that free-tier inputs may be used to improve its products. Do not enable it for memories you are unwilling to send to that service.
+
+New or changed memories are placed in a durable background indexing queue after the canonical bucket is committed. Failures use exponential backoff and survive restarts. Existing memories are reconciled automatically at startup. `POST /api/memory-index/reindex` can rebuild the projection; pass `{ "force": true, "wait": true }` for an immediate full rebuild.
+
+Before creating a normal fact/event/pattern bucket, Kirari searches for a compatible existing memory. Exact or high-confidence matches merge raw text, tags, entities, sources, and lineage instead of creating duplicates. Protected feeling, promise, boundary, plan, letter, pinned, and permanent records never merge implicitly.
+
+Search is deliberately read-only. Companion structured output reports only memory IDs that materially affected the reply; those records are then explicitly reinforced and send a small activation ripple to up to five memories created within 48 hours. After six idle hours a new conversation also receives a bounded no-query resurfacing set containing core, cold-start, recent, vivid, and occasionally older memories.
+
+Natural forgetting is archival, never physical deletion. The Ombre-style score combines importance, activation consolidation, exponential decay, short/long-term time-emotion weighting, resolved/digested factors, and urgency. Pinned, feeling, promise, boundary, plan, letter, and permanent records are protected. Archived records remain searchable and can be restored. `DELETE /api/memories/{id}` creates a recoverable tombstone; there is no public physical-purge endpoint. Automatic decay runs every 24 hours by default and can be disabled with `MEMORY_DECAY_ENABLED=false`.
+
+Dream writes ordinary memories through the same deduplicating bucket pipeline and stores first-person feeling sediment as protected `feel` buckets with source-message provenance. When a new feeling is semantically close to at least two earlier feelings, Kirari creates a review proposal to crystallise the recurring theme into pinned memory.
+
+## Proactive messages
+
+Proactive contact is off by default. Enable it explicitly:
+
+```dotenv
+PROACTIVE_ENABLED=true
+PROACTIVE_IDLE_HOURS=18
+PROACTIVE_COOLDOWN_HOURS=24
+PROACTIVE_QUIET_START=23
+PROACTIVE_QUIET_END=8
+```
+
+Kirari only checks in after inactivity, respects the cooldown and local quiet hours, and instructs the model not to guilt the user or demand a response.
+
+Scheduled daily reflection is also opt-in because it consumes subscription allowance. Set `DREAM_SCHEDULE_ENABLED=true` and choose `DREAM_HOUR=4`; manual reflection remains available from the control panel.
+
+## API overview
+
+- `GET /api/status` — Codex subscription login and scheduler status.
+- `POST /api/chat` — local companion chat with persisted context.
+- `GET /api/messages` — conversation history; optional `chat_id` filter.
+- `POST /api/messages/{id}/pin` — pin a message into memory.
+- `POST /api/memories/{id}/reinforce` — explicitly strengthen a useful memory.
+- `POST /api/memories/{id}/restore` — restore an archived memory.
+- `GET /api/memories/{id}/trace` — inspect source messages, lineage, footprints, and bucket path.
+- `GET /api/memories/surface` — preview no-query automatic resurfacing.
+- `GET /api/memories/feel/search?q=...` — search protected feeling sediment.
+- `POST /api/memories/decay` — preview or apply archival decay.
+- `POST /api/memory-index/reindex` — reconcile or rebuild Gemini vectors.
+- `GET|PUT /api/files/{name}` — readable companion files and versions.
+- `GET|POST|PATCH|DELETE /api/memories` — bucket memory bank; DELETE creates a tombstone.
+- `GET|POST /api/reviews` — approve or reject proposed state changes.
+- `GET|POST /api/calendar` — life, relationship, and work events.
+- `GET|POST|PATCH /api/reminders` — reminders, recurrence, and snooze.
+- `POST /api/dream/run` — run reflection now.
+- `POST /telegram/webhook` — webhook mode only.
+
+When `KIRARI_ACCESS_KEY` or `TELEGRAM_BOT_TOKEN` is configured, `/api/*` routes require the access key or valid Telegram Mini App init data.
+
+## Test
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
-hermes status
+python -m pytest -q
+python -m compileall app
 ```
 
-Configure your model provider locally:
-
-```bash
-hermes model
-hermes auth status
-```
-
-### Install Kirari
-
-```bash
-git clone https://github.com/DriftingBoats/kirari.git
-cd kirari
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-Edit `.env` locally:
-
-```env
-APP_HOST=0.0.0.0
-APP_PORT=8080
-BASE_URL=https://example.com
-APP_DATA_DIR=./data
-
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_ALLOWED_USER_IDS=
-TELEGRAM_WEBHOOK_SECRET=
-
-HERMES_BIN=hermes
-HERMES_HOME=~/.hermes
-HERMES_TIMEOUT_SECONDS=180
-HERMES_DRY_RUN=false
-
-DREAM_HOUR=4
-RECENT_MESSAGE_LIMIT=24
-```
-
-`.env` is ignored by git. Keep all real values there or in `~/.hermes/.env`.
-
-## Running Locally
-
-```bash
-. .venv/bin/activate
-uvicorn app.main:app --host 127.0.0.1 --port 8080
-```
-
-Open:
-
-```text
-http://127.0.0.1:8080/
-```
-
-Health/config endpoint:
-
-```text
-GET /api/status
-```
-
-If the service is reachable from a network, set an access key:
-
-```env
-KIRARI_ACCESS_KEY=replace_with_a_long_random_value
-```
-
-When configured, all `/api/*` routes except `/api/auth/status` require the
-`X-Kirari-Key` header, `?key=...`, the `kirari_key` cookie, or a valid
-Telegram Mini App `initData` value sent as `X-Telegram-Init-Data`. The Mini App
-path is the preferred entry: Telegram signs the current user session, Kirari
-verifies it with `TELEGRAM_BOT_TOKEN`, and optional
-`TELEGRAM_ALLOWED_USER_IDS` restricts access to specific Telegram accounts.
-The browser UI only prompts for the key when it is opened outside Telegram.
-
-Hermes Gateway caches the agent system prompt for active sessions. Kirari writes
-`SOUL.md` to Hermes' native identity slot and also generates
-`~/.hermes/HERMES.md` from `PINNED.md`, `USER.md`, `MEMORY.md`, `FEEL.md`,
-`DREAM.md`, and `BOARD.md` so Gateway injects those companion files as project
-context. When the Mini App saves any editable context file, Kirari restarts
-`HERMES_GATEWAY_SERVICE` so the next Telegram reply uses the fresh context.
-The same reload path runs after generated memories, approved review items,
-board messages, and dream/feel digestion.
-
-## API Surface
-
-Common routes:
-
-- `GET /` - Mini App/control panel shell.
-- `GET /api/config` - safe runtime configuration summary.
-- `GET /api/memories` - list memory files.
-- `GET /api/memories/{name}` - read a memory file.
-- `PUT /api/memories/{name}` - update an editable memory file.
-- `GET /api/board` - list board messages.
-- `POST /api/board` - create a board message.
-- `GET /api/reminders` - list reminders.
-- `POST /api/reminders` - create a reminder.
-- `POST /api/dream/run` - run a dream/feel reflection pass.
-- `POST /telegram/webhook` - Telegram webhook endpoint.
-
-## Testing
-
-```bash
-python3 -m pytest -q
-```
-
-For a quick syntax check:
-
-```bash
-python3 -m compileall app
-```
+Tests never invoke Codex or consume subscription usage.
 
 ## Security
 
-Never commit:
+Never commit `.env`, Telegram bot tokens, `~/.codex/auth.json`, private memory files, or the SQLite database. Keep the control panel bound to `127.0.0.1` unless you have configured authentication and HTTPS.
 
-- `.env`
-- `~/.hermes/.env`
-- `~/.hermes/auth.json`
-- Telegram bot tokens
-- Codex/OpenAI/Anthropic/OAuth access tokens
-- refresh tokens
-- local SQLite databases
-- pairing records
-- real `SOUL.md`, `USER.md`, `MEMORY.md`, `FEEL.md`, or `DREAM.md` files
-  containing private personal data
+## Documentation
 
-Before publishing, run:
-
-```bash
-rg -n --hidden \
-  'token|secret|oauth|authorization|api[_-]?key|password|refresh_token|access_token' .
-```
-
-This repository includes `.env.example` only as a template. Real values belong
-in your local environment.
-
-If a secret is ever pushed by mistake:
-
-1. Revoke or rotate it immediately.
-2. Remove it from git history.
-3. Force-push only after understanding the impact.
-4. Treat the old value as compromised forever.
-
-## Deployment Notes
-
-For personal use, Hermes Gateway as a user service is the simplest option:
-
-```bash
-hermes gateway install
-hermes gateway start
-hermes gateway status
-```
-
-For a cloud Mini App or webhook deployment:
-
-- Use HTTPS.
-- Set `BASE_URL` to the public URL.
-- Set a strong `TELEGRAM_WEBHOOK_SECRET`.
-- Keep `TELEGRAM_ALLOWED_USER_IDS` restricted.
-- Keep `GATEWAY_ALLOW_ALL_USERS=false` if using Hermes Gateway.
-- Store runtime data on persistent storage.
-
-## Roadmap
-
-- Telegram Mini App polish.
-- Calendar view for relationship and work dates.
-- Reminder delivery through Telegram.
-- Review queue UI for proposed memories.
-- Optional embedding index for retrieval, while keeping Markdown as truth.
-- Safer import/export of memory packs.
-- Better SOUL.md editing workflow in the Mini App.
+- [Codex CLI](https://developers.openai.com/codex/cli)
+- [Codex non-interactive mode](https://developers.openai.com/codex/non-interactive-mode)
+- [Using Codex with a ChatGPT plan](https://help.openai.com/en/articles/11369540)
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT
