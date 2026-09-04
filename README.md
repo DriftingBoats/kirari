@@ -1,5 +1,7 @@
 # Kirari
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Kirari is a private, Telegram-first companion agent powered by the Codex CLI login included with a ChatGPT plan. It does not use Hermes or an OpenAI API key. An optional Gemini API key is used only for semantic memory embeddings.
 
 The project deliberately separates the companion product from the model runtime:
@@ -26,6 +28,55 @@ Codex CLI (`codex exec`, ChatGPT account login)
 - Local SQLite history, memory-file versioning, and rollback.
 
 Voice, image generation, avatars, and multiple companions are intentionally not in the core yet. The common companion foundations—identity, continuity, memory control, initiative, and user-visible governance—come first.
+
+## Project structure
+
+```text
+kirari/
+├── app/
+│   ├── main.py                 # FastAPI application, routes, and background tasks
+│   ├── agent.py                # Codex subscription runtime adapter
+│   ├── companion.py            # Companion reply schema and memory reinforcement
+│   ├── config.py               # Environment-based configuration
+│   ├── db.py                   # SQLite schema and disposable projections
+│   ├── memory_store.py         # Canonical Markdown memory buckets
+│   ├── memory_service.py       # Save, merge, archive, restore, and tombstone logic
+│   ├── retrieval.py            # Hybrid retrieval and automatic resurfacing
+│   ├── embeddings.py           # Optional Gemini vector indexing
+│   ├── memory_lifecycle.py     # Reinforcement, decay, and archival lifecycle
+│   ├── memory_files.py         # SOUL/PINNED/USER/FEEL/DREAM file management
+│   ├── dream.py                # Dream/Feel consolidation
+│   ├── proactive.py            # Opt-in proactive check-ins
+│   ├── reminders.py            # Recurring reminders and snooze
+│   ├── telegram.py             # Telegram polling, webhook, and persistence
+│   ├── telegram_webapp.py      # Telegram Mini App authentication
+│   └── schemas.py              # API request models
+├── static/
+│   ├── index.html              # Single-page control panel
+│   ├── app.css                 # Chinese-first responsive visual system
+│   └── app.js                  # Frontend state, navigation, and API calls
+├── tests/                      # Runtime, memory, authentication, and review tests
+├── docs/ROADMAP.md             # Product roadmap
+├── .env.example                # Safe configuration template
+├── .impeccable.md              # Persistent frontend design direction
+├── SECURITY.md                 # Security and privacy notes
+├── pyproject.toml              # Python project metadata
+└── requirements.txt            # Runtime dependencies
+```
+
+Runtime data is deliberately outside the source tree tracked by Git:
+
+```text
+data/
+├── kirari.sqlite3              # Conversation history and rebuildable indexes
+└── memory/
+    ├── SOUL.md / PINNED.md / USER.md / MEMORY.md
+    ├── FEEL.md / DREAM.md / BOARD.md
+    └── buckets/
+        ├── active/{domain}/{memory-id}.md
+        ├── archive/{domain}/{memory-id}.md
+        └── tombstone/{domain}/{memory-id}.md
+```
 
 ## Codex subscription runtime
 
